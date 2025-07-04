@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import timedelta
 import colorsys
-import os # Importe a biblioteca os para manipulação de caminhos
+import os
 
 # Função para escurecer uma cor RGB em 50%
 def darken_color(hex_color, factor=0.5):
@@ -24,7 +24,7 @@ def darken_color(hex_color, factor=0.5):
 # --- Configuração da Página ---
 st.set_page_config(layout="wide")
 
-# --- NOVO: Função para carregar e aplicar o CSS de um arquivo externo ---
+# --- Função para carregar e aplicar o CSS de um arquivo externo ---
 def apply_external_css(css_file_path):
     # Verifica se o arquivo existe para evitar erros
     if os.path.exists(css_file_path):
@@ -33,9 +33,7 @@ def apply_external_css(css_file_path):
     else:
         st.warning(f"Arquivo CSS não encontrado em: {css_file_path}. A estilização pode não ser aplicada.")
 
-
-# Use os.path.dirname(__file__) para obter o diretório do script atual
-# Isso garante que o caminho seja correto tanto localmente quanto no Streamlit Cloud
+# Caminho para o arquivo CSS. Garante que funciona tanto localmente quanto no Streamlit Cloud.
 css_path = os.path.join(os.path.dirname(__file__), 'style.css')
 apply_external_css(css_path)
 
@@ -72,11 +70,11 @@ if not df.empty:
     
     with col2:
         tipos_unicos = sorted(df['Tipo'].dropna().unique())
-        tipo_filtro = st.multiselect("TIPO", options=tipos_unicos, placeholder="Selecione o(s) Tipo(s)")
+        tipo_filtro = st.multiselect("TIPO", options=tipos_unicas, placeholder="Selecione o(s) Tipo(s)")
     
     with col3:
         subtipos_unicos = sorted(df['Subtipo'].dropna().unique())
-        subtipo_filtro = st.multiselect("SUBTIPO", options=subtipos_unicos, placeholder="Selecione o(s) Subtipo(s)")
+        subtipo_filtro = st.multiselect("SUBTIPO", options=subtipos_unicas, placeholder="Selecione o(s) Subtipo(s)")
     
     with col4:
         projetos_unicos = sorted(df['nome'].dropna().unique())
@@ -156,9 +154,11 @@ if not df.empty:
             # Barra principal (duração total do projeto)
             fig.add_trace(
                 go.Bar(
-                    x=[row['Previsão de término']], # Fim da barra
+                    # X agora é a DURAÇÃO em dias
+                    x=[(row['Previsão de término'] - row['Data de Início do projeto']).days], 
                     y=[row['nome']],
-                    base=[row['Data de Início do projeto']], # Início da barra
+                    # Base é a Data de Início do projeto
+                    base=[row['Data de Início do projeto']], 
                     orientation='h',
                     marker=dict(
                         color=base_color,
@@ -174,9 +174,11 @@ if not df.empty:
             if row['Andamento MVP'] > 0:
                 fig.add_trace(
                     go.Bar(
-                        x=[row['MVP End']], # Fim da barra do MVP
+                        # X da barra MVP é a DURAÇÃO do MVP em dias
+                        x=[(row['MVP End'] - row['Data de Início do projeto']).days], 
                         y=[row['nome']],
-                        base=[row['Data de Início do projeto']], # Início da barra do MVP (mesmo do projeto)
+                        # Base da barra MVP é a Data de Início do projeto
+                        base=[row['Data de Início do projeto']], 
                         orientation='h',
                         marker=dict(
                             color=mvp_color,
