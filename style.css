@@ -1,0 +1,10 @@
+.header {
+    background-color: #008000; /* Verde */
+    color: white;
+    padding: 20px;
+    text-align: center;
+    font-size: 28px;
+    font-weight: bold;
+    border-radius: 10px;
+    margin-bottom: 25px;
+}
