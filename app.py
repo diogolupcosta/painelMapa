@@ -7,37 +7,34 @@ import colorsys
 
 # Função para escurecer uma cor RGB em 50%
 def darken_color(hex_color, factor=0.5):
-    # Remove o '#' se presente
     hex_color = hex_color.lstrip('#')
-    # Converte hex para RGB
     rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    # Converte RGB para HSV para ajustar o brilho
     h, s, v = colorsys.rgb_to_hsv(rgb[0]/255.0, rgb[1]/255.0, rgb[2]/255.0)
-    # Reduz o valor (brilho) pelo fator
     v = max(0, v * factor)
-    # Converte de volta para RGB
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
-    # Converte para hex
     return '#{:02x}{:02x}{:02x}'.format(int(r*255), int(g*255), int(b*255))
 
 # --- Configuração da Página ---
 st.set_page_config(layout="wide")
 
 # --- CSS Customizado para Estilização ---
-st.markdown("""
-<style>
-.header {
-    background-color: #008000; /* Verde */
-    color: white;
-    padding: 20px;
-    text-align: center;
-    font-size: 28px;
-    font-weight: bold;
-    border-radius: 10px;
-    margin-bottom: 25px;
-}
-</style>
-""", unsafe_allow_html=True)
+st.markdown(
+    """
+    <style>
+    .header {
+        background-color: #008000;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        font-size: 28px;
+        font-weight: bold;
+        border-radius: 10px;
+        margin-bottom: 25px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # --- Cabeçalho ---
 st.markdown('<div class="header">PAINEL EXECUTIVO - MAPA</div>', unsafe_allow_html=True)
@@ -64,7 +61,7 @@ df = carregar_dados()
 if not df.empty:
     # --- Filtros de Controle ---
     st.subheader("Filtros de Controle")
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col col4, col5 = st.columns(5)
     
     with col1:
         secretarias_unicas = sorted(df['Secretaria'].dropna().unique())
@@ -97,7 +94,7 @@ if not df.empty:
     if projeto_filtro:
         df_filtrado = df_filtrado[df_filtrado['nome'].isin(projeto_filtro)]
     if situacao_filtro:
-        df_filtrado = df_filtrado[df_filtrado['ids'].isin(situacao_filtro)]
+        df_filtrado = df_filtrado[df_filtrado['Status do Projeto'].isin(situacao_filtro)]
 
     st.markdown("<br>", unsafe_allow_html=True)
 
