@@ -44,7 +44,9 @@ st.markdown('<div class="header">PAINEL EXECUTIVO - MAPA</div>', unsafe_allow_ht
 @st.cache_data
 def carregar_dados():
     try:
-        df = pd.read_excel('projetos.xlsx')
+        # Usamos os.path.join para construir um caminho robusto para o arquivo
+        data_file_path = os.path.join(os.path.dirname(__file__), 'projetos.xlsx')
+        df = pd.read_excel(data_file_path)
         colunas_data = [
             'Data de recebimento (SEI)', 'Data de Início do projeto',
             'Previsão de entrega MVP', 'Previsão de término', 'Data de fim do projeto'
@@ -54,17 +56,22 @@ def carregar_dados():
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
         return df
     except FileNotFoundError:
-        st.error("Arquivo 'projetos.xlsx' não encontrado. Por favor, coloque o arquivo no mesmo diretório deste script.")
+        st.error(f"Arquivo 'projetos.xlsx' não encontrado no caminho: {data_file_path}. Por favor, verifique se o arquivo está no mesmo diretório do script e se o nome está correto.")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Ocorreu um erro ao carregar os dados: {e}. Verifique o formato do arquivo 'projetos.xlsx'.")
         return pd.DataFrame()
 
 df = carregar_dados()
 
+# --- Lógica Principal do Aplicativo ---
 if not df.empty:
     # --- Filtros de Controle ---
     st.subheader("Filtros de Controle")
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
+        # Garante que as opções são únicas e ordenadas
         secretarias_unicas = sorted(df['Secretaria'].dropna().unique())
         secretaria_filtro = st.multiselect("SECRETARIA", options=secretarias_unicas, placeholder="Selecione a(s) Secretaria(s)")
     
@@ -232,3 +239,6 @@ if not df.empty:
         if col in df_para_exibir.columns:
             df_para_exibir[col] = pd.to_datetime(df_para_exibir[col]).dt.strftime('%d/%m/%Y')
     st.dataframe(df_para_exibir, use_container_width=True)
+
+else:
+    st.info("Nenhum dado encontrado no arquivo 'projetos.xlsx' ou o arquivo está ausente/inválido. Verifique o arquivo e o diretório.")
