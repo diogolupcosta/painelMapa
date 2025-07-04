@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import timedelta
 import colorsys
+import os # Importe a biblioteca os para manipulação de caminhos
 
 # Função para escurecer uma cor RGB em 50%
 def darken_color(hex_color, factor=0.5):
@@ -23,25 +24,20 @@ def darken_color(hex_color, factor=0.5):
 # --- Configuração da Página ---
 st.set_page_config(layout="wide")
 
-# --- NOVO: Função para carregar e aplicar o CSS ---
-def apply_custom_css():
-    st.markdown("""
-    <style>
-    .header {
-        background-color: #008000; /* Verde */
-        color: white;
-        padding: 20px;
-        text-align: center;
-        font-size: 28px;
-        font-weight: bold;
-        border-radius: 10px;
-        margin-bottom: 25px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# --- NOVO: Função para carregar e aplicar o CSS de um arquivo externo ---
+def apply_external_css(css_file_path):
+    # Verifica se o arquivo existe para evitar erros
+    if os.path.exists(css_file_path):
+        with open(css_file_path, "r") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    else:
+        st.warning(f"Arquivo CSS não encontrado em: {css_file_path}. A estilização pode não ser aplicada.")
 
-# Chama a função para aplicar o CSS no início do seu script
-apply_custom_css()
+
+# Use os.path.dirname(__file__) para obter o diretório do script atual
+# Isso garante que o caminho seja correto tanto localmente quanto no Streamlit Cloud
+css_path = os.path.join(os.path.dirname(__file__), 'style.css')
+apply_external_css(css_path)
 
 # --- Cabeçalho ---
 st.markdown('<div class="header">PAINEL EXECUTIVO - MAPA</div>', unsafe_allow_html=True)
@@ -101,7 +97,7 @@ if not df.empty:
     if projeto_filtro:
         df_filtrado = df_filtrado[df_filtrado['nome'].isin(projeto_filtro)]
     if situacao_filtro:
-        df_filtrado = df_filtrado[df_filtrado['Status do Projeto'].isin(situacao_filtro)] # Corrigido para 'Status do Projeto'
+        df_filtrado = df_filtrado[df_filtrado['Status do Projeto'].isin(situacao_filtro)]
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -151,8 +147,6 @@ if not df.empty:
         # Adiciona a barra principal (duração total do projeto)
         for idx, row in df_grafico.iterrows():
             # Cor base para a barra principal
-            # Usamos o hash do nome do projeto para ter cores consistentes para o mesmo projeto
-            # mesmo se a ordem dos projetos filtrados mudar
             project_hash = hash(row['nome']) % len(px.colors.qualitative.Plotly)
             base_color = px.colors.qualitative.Plotly[project_hash]
             
@@ -218,9 +212,6 @@ if not df.empty:
             barmode='overlay'  # Permite sobreposição das barras
         )
         
-        # O textfont_size já está definido na trace do MVP, então essa linha pode ser removida
-        # fig.update_traces(textfont_size=14) 
-
         # Exibe o gráfico no Streamlit
         st.plotly_chart(fig, use_container_width=True)
     else:
