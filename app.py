@@ -8,17 +8,11 @@ import os
 
 # Função para escurecer uma cor RGB em 50%
 def darken_color(hex_color, factor=0.5):
-    # Remove o '#' se presente
     hex_color = hex_color.lstrip('#')
-    # Converte hex para RGB
     rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    # Converte RGB para HSV para ajustar o brilho
     h, s, v = colorsys.rgb_to_hsv(rgb[0]/255.0, rgb[1]/255.0, rgb[2]/255.0)
-    # Reduz o valor (brilho) pelo fator
     v = max(0, v * factor)
-    # Converte de volta para RGB
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
-    # Converte para hex
     return '#{:02x}{:02x}{:02x}'.format(int(r*255), int(g*255), int(b*255))
 
 # --- Configuração da Página ---
@@ -52,7 +46,6 @@ def carregar_dados():
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
 
-        # GERA AS LISTAS DE OPÇÕES DENTRO DA FUNÇÃO CACHEADA
         secretarias_unicas = sorted(df['Secretaria'].dropna().unique().tolist()) if 'Secretaria' in df.columns else []
         tipos_unicos = sorted(df['Tipo'].dropna().unique().tolist()) if 'Tipo' in df.columns else []
         subtipos_unicos = sorted(df['Subtipo'].dropna().unique().tolist()) if 'Subtipo' in df.columns else []
@@ -63,14 +56,11 @@ def carregar_dados():
 
     except FileNotFoundError:
         st.error(f"Arquivo 'projetos.xlsx' não encontrado no caminho: {data_file_path}. Por favor, verifique se o arquivo está no mesmo diretório do script e se o nome está correto.")
-        # Retorna listas vazias para evitar NameError no caso de erro de arquivo
         return pd.DataFrame(), [], [], [], [], []
     except Exception as e:
         st.error(f"Ocorreu um erro ao carregar os dados ou preparar os filtros: {e}. Verifique o formato do arquivo 'projetos.xlsx' e as colunas utilizadas.")
-        # Retorna listas vazias em caso de outros erros
         return pd.DataFrame(), [], [], [], [], []
 
-# Chama a função e desempacota os resultados
 df, secretarias_unicas, tipos_unicos, subtipos_unicos, projetos_unicos, situacoes_unicas = carregar_dados()
 
 # --- Lógica Principal do Aplicativo ---
@@ -83,7 +73,7 @@ if not df.empty:
         secretaria_filtro = st.multiselect("SECRETARIA", options=secretarias_unicas, placeholder="Selecione a(s) Secretaria(s)")
     
     with col2:
-        tipo_filtro = st.multiselect("TIPO", options=tipos_unicos, placeholder="Selecione o(s) Tipo(s)")
+        tipo_filtro = st.multiselect("TIPO", options=tipos_unicas, placeholder="Selecione o(s) Tipo(s)")
     
     with col3:
         subtipo_filtro = st.multiselect("SUBTIPO", options=subtipos_unicos, placeholder="Selecione o(s) Subtipo(s)")
@@ -134,16 +124,26 @@ if not df.empty:
     # Prepara o dataframe para o gráfico, removendo projetos sem datas essenciais
     df_grafico = df_filtrado.dropna(subset=['Data de Início do projeto', 'Previsão de término']).copy()
 
+    # --- Bloco de depuração para df_grafico ---
+    st.write("DataFrame para o Gráfico (df_grafico):")
+    st.dataframe(df_grafico)
+    st.write(f"Número de linhas em df_grafico: {len(df_grafico)}")
+    # --- Fim do bloco de depuração ---
+
     # Calcula a duração do MVP com base no percentual de Andamento MVP
     df_grafico['Andamento MVP'] = pd.to_numeric(df_grafico['Andamento MVP'], errors='coerce').fillna(0)
     df_grafico['MVP End'] = df_grafico.apply(
         lambda row: row['Data de Início do projeto'] + timedelta(days=(
             (row['Previsão de término'] - row['Data de Início do projeto']).days * row['Andamento MVP'] / 100
-        )) if row['Andamento MVP'] > 0 else row['Data de Início do projeto'],
+        )) if row['Andamento MVP'] > 0 and pd.notna(row['Previsão de término']) and pd.notna(row['Data de Início do projeto']) else row['Data de Início do projeto'],
         axis=1
     )
+    # Garante que 'MVP End' seja um datetime, mesmo se o cálculo falhar
+    df_grafico['MVP End'] = pd.to_datetime(df_grafico['MVP End'], errors='coerce')
+
     # Formata o texto do Andamento MVP para exibição
     df_grafico['Andamento MVP Text'] = df_grafico['Andamento MVP'].apply(lambda x: f"{x:.0f}%" if x > 0 else "")
+
 
     if not df_grafico.empty:
         # Ordena os projetos pela data de início para melhor visualização
@@ -161,10 +161,16 @@ if not df.empty:
             # Cor mais escura (50%) para a barra de MVP
             mvp_color = darken_color(base_color, factor=0.5)
 
-            # Barra principal (duração total do projeto)
+            # --- CÁLCULO DA DURAÇÃO ROBUSTO ---
+            # Garante que as datas são válidas antes de calcular a duração
+            if pd.notna(row['Previsão de término']) and pd.notna(row['Data de Início do projeto']):
+                duration_total_days = max(1, (row['Previsão de término'] - row['Data de Início do projeto']).days)
+            else:
+                duration_total_days = 1 # Duração mínima se as datas forem inválidas
+
             fig.add_trace(
                 go.Bar(
-                    x=[(row['Previsão de término'] - row['Data de Início do projeto']).days], 
+                    x=[duration_total_days], 
                     y=[row['nome']],
                     base=[row['Data de Início do projeto']], 
                     orientation='h',
@@ -180,9 +186,15 @@ if not df.empty:
             )
             # Adiciona a barra de MVP (mais escura)
             if row['Andamento MVP'] > 0:
+                # --- CÁLCULO DA DURAÇÃO MVP ROBUSTO ---
+                if pd.notna(row['MVP End']) and pd.notna(row['Data de Início do projeto']):
+                    duration_mvp_days = max(1, (row['MVP End'] - row['Data de Início do projeto']).days)
+                else:
+                    duration_mvp_days = 1 # Duração mínima se as datas forem inválidas
+
                 fig.add_trace(
                     go.Bar(
-                        x=[(row['MVP End'] - row['Data de Início do projeto']).days], 
+                        x=[duration_mvp_days], 
                         y=[row['nome']],
                         base=[row['Data de Início do projeto']], 
                         orientation='h',
