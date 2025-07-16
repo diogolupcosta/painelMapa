@@ -25,9 +25,9 @@ st.markdown(
     .header {
         background-color: #008000;
         color: white;
-        padding: 20px;
+        padding: 10px;
         text-align: center;
-        font-size: 28px;
+        font-size: 18px;
         font-weight: bold;
         border-radius: 10px;
         margin-bottom: 25px;
@@ -232,7 +232,10 @@ if not df.empty:
                 range=[min_date, max_date]
             ),
             yaxis=dict(
-                autorange="reversed"
+                autorange="reversed",
+                showgrid=True,
+                gridcolor='rgba(211, 211, 211, 0.5)',
+                showticklabels=False
             ),
             height=max(400, len(df_grafico) * 60),
             barmode='overlay',
