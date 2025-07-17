@@ -2,18 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import timedelta
-import colorsys
+from datetime import timedelta, datetime
 from dateutil.relativedelta import relativedelta
-
-# Função para escurecer uma cor RGB em 50%
-def darken_color(hex_color, factor=0.5):
-    hex_color = hex_color.lstrip('#')
-    rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    h, s, v = colorsys.rgb_to_hsv(rgb[0]/255.0, rgb[1]/255.0, rgb[2]/255.0)
-    v = max(0, v * factor)
-    r, g, b = colorsys.hsv_to_rgb(h, s, v)
-    return '#{:02x}{:02x}{:02x}'.format(int(r*255), int(g*255), int(b*255))
 
 # --- Configuração da Página ---
 st.set_page_config(layout="wide")
@@ -82,7 +72,7 @@ if not df.empty:
     
     with col5:
         situacoes_unicas = sorted(df['Status do Projeto'].dropna().unique())
-        situacao_filtro = st.multiselect("SITUAÇÃO DO PROJETO", options=situacoes_unicas, placeholder="Selecione a(s) Situação(s)")
+        situacao_filtro = st.multiselect("SITUAÇÃO DO PROJETO", options=situacoes_unicas, default=['Em andamento'], placeholder="Selecione a(s) Situação(s)")
 
     # --- Lógica de Filtragem ---
     df_filtrado = df.copy()
@@ -102,7 +92,7 @@ if not df.empty:
     # --- Box de KPIs (Indicadores) ---
     st.subheader("Resumo dos Projetos")
     total_projetos = len(df_filtrado)
-    projetos_andamento = len(df_filtrado[df_filtrado['Status do Projeto'] == 'Em andamento'])
+    projetos_andamento = len(df_filtrado[df_filtrado['Status do Projeto'] == 'Em Andamento'])
     projetos_concluidos = len(df_filtrado[df_filtrado['Status do Projeto'] == 'Concluído'])
     projetos_paralisados = len(df_filtrado[df_filtrado['Status do Projeto'] == 'Paralisado / Despriorizado'])
     projetos_internos = len(df_filtrado[df_filtrado['Tipo'] == 'INTERNO'])
@@ -117,9 +107,6 @@ if not df.empty:
     kpi6.metric(label="EXTERNOS", value=projetos_externos)
 
     st.markdown("---")
-
-    # --- Gráfico de Gantt (Cronograma) ---
-    st.subheader("Cronograma dos Projetos (Gráfico de Gantt)")
 
     # Prepara o dataframe para o gráfico, removendo projetos sem datas essenciais
     df_grafico = df_filtrado.dropna(subset=['Data de Início do projeto', 'Previsão de término']).copy()
@@ -144,11 +131,6 @@ if not df.empty:
 
         # Adiciona as barras dos projetos
         for idx, row in df_grafico.iterrows():
-            # Cor base para a barra principal
-            base_color = px.colors.qualitative.Plotly[idx % len(px.colors.qualitative.Plotly)]
-            # Cor mais escura (50%) para a barra de MVP
-            mvp_color = darken_color(base_color, factor=0.5)
-
             # Calcula a duração do projeto em milissegundos (para trabalhar com datas)
             duracao_ms = (row['Previsão de término'] - row['Data de Início do projeto']).total_seconds() * 1000
             
@@ -160,7 +142,7 @@ if not df.empty:
                     base=row['Data de Início do projeto'],
                     orientation='h',
                     marker=dict(
-                        color=base_color,
+                        color='#00D000',
                         opacity=0.7
                     ),
                     name=row['nome'],
@@ -171,13 +153,12 @@ if not df.empty:
                         f"<b>{row['nome']}</b><br>" +
                         f"Início: {row['Data de Início do projeto'].strftime('%d/%m/%Y')}<br>" +
                         f"Fim: {row['Previsão de término'].strftime('%d/%m/%Y')}<br>" +
-                        f"Duração: {(row['Previsão de término'] - row['Data de Início do projeto']).days} dias<br>" +
                         "<extra></extra>"
                     )
                 )
             )
             
-            # Adiciona a barra de MVP (mais escura)
+            # Adiciona a barra de MVP
             if row['Andamento MVP'] > 0:
                 # Calcula a duração do MVP em milissegundos
                 duracao_mvp_ms = (row['MVP End'] - row['Data de Início do projeto']).total_seconds() * 1000
@@ -189,7 +170,7 @@ if not df.empty:
                         base=row['Data de Início do projeto'],
                         orientation='h',
                         marker=dict(
-                            color=mvp_color,
+                            color='#00D000',
                             opacity=1.0
                         ),
                         name=f"{row['nome']} MVP",
@@ -206,7 +187,7 @@ if not df.empty:
                 )
 
         # Define o intervalo do eixo X com base nas datas mínimas e máximas
-        min_date = df_grafico['Data de Início do projeto'].min() - timedelta(days=30)
+        min_date = pd.Timestamp(2025, 1, 1)
         max_date = max(df_grafico['Previsão de término'].max(), df_grafico['MVP End'].max()) + timedelta(days=30)
 
         # Gera ticks mensais
@@ -218,7 +199,7 @@ if not df.empty:
 
         # Atualizações de layout para melhor visualização
         fig.update_layout(
-            title_text='Cronograma dos Projetos',
+            title_text='Cronograma de Entregas',
             xaxis_title='Período',
             yaxis_title='Projetos',
             showlegend=False,
