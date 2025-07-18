@@ -72,10 +72,15 @@ if not df.empty:
     
     with col5:
         situacoes_unicas = sorted(df['Status do Projeto'].dropna().unique())
-        situacao_filtro = st.multiselect("SITUAÇÃO DO PROJETO", options=situacoes_unicas, default=['Em andamento'], placeholder="Selecione a(s) Situação(s)")
+        default_situacao = ['Em andamento'] if 'Em andamento' in situacoes_unicas else []
+        situacao_filtro = st.multiselect("SITUAÇÃO DO PROJETO", options=situacoes_unicas, default=default_situacao, placeholder="Selecione a(s) Situação(s)")
+        if not default_situacao:
+            st.warning(f"Valor padrão 'Em andamento' não encontrado. Valores disponíveis: {situacoes_unicas}")
 
     # --- Lógica de Filtragem ---
     df_filtrado = df.copy()
+    if not situacao_filtro and 'Em andamento' in situacoes_unicas:
+        situacao_filtro = ['Em andamento']  # Aplica o filtro padrão se nenhum filtro foi selecionado
     if secretaria_filtro:
         df_filtrado = df_filtrado[df_filtrado['Secretaria'].isin(secretaria_filtro)]
     if tipo_filtro:
@@ -92,7 +97,7 @@ if not df.empty:
     # --- Box de KPIs (Indicadores) ---
     st.subheader("Resumo dos Projetos")
     total_projetos = len(df_filtrado)
-    projetos_andamento = len(df_filtrado[df_filtrado['Status do Projeto'] == 'Em Andamento'])
+    projetos_andamento = len(df_filtrado[df_filtrado['Status do Projeto'] == 'Em andamento'])
     projetos_concluidos = len(df_filtrado[df_filtrado['Status do Projeto'] == 'Concluído'])
     projetos_paralisados = len(df_filtrado[df_filtrado['Status do Projeto'] == 'Paralisado / Despriorizado'])
     projetos_internos = len(df_filtrado[df_filtrado['Tipo'] == 'INTERNO'])
