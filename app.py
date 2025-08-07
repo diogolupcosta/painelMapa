@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import timedelta, datetime
 from dateutil.relativedelta import relativedelta
+import os
 
 # --- Configuração da Página ---
 st.set_page_config(layout="wide")
@@ -22,6 +23,26 @@ st.markdown(
         border-radius: 10px;
         margin-bottom: 25px;
     }
+    
+    /* Regras para diminuir o container 'Resumo de Projetos' */
+    div[data-testid="stMetric"] {
+        padding: 10px;
+    }
+    div[data-testid="stMetric"] label {
+        font-size: 14px;
+    }
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+        font-size: 20px;
+    }
+
+    /* Aplica o mesmo estilo para os filtros */
+    .stMultiSelect {
+        padding-top: 0px;
+        padding-bottom: 0px;
+    }
+    .stMultiSelect label {
+        font-size: 14px;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -34,7 +55,8 @@ st.markdown('<div class="header">PAINEL EXECUTIVO - MAPA</div>', unsafe_allow_ht
 @st.cache_data
 def carregar_dados():
     try:
-        df = pd.read_excel('projetos.xlsx')
+        data_file_path = os.path.join(os.path.dirname(__file__), 'projetos.xlsx')
+        df = pd.read_excel(data_file_path)
         colunas_data = [
             'Data de recebimento (SEI)', 'Data de Início do projeto',
             'Previsão de entrega MVP', 'Previsão de término', 'Data de fim do projeto'
@@ -50,7 +72,7 @@ def carregar_dados():
 df = carregar_dados()
 
 if not df.empty:
-    # --- Filtros de Controle ---
+    # --- Filtros de Controle (Agora no início) ---
     st.subheader("Filtros de Controle")
     col1, col2, col3, col4, col5 = st.columns(5)
     
@@ -77,10 +99,12 @@ if not df.empty:
         if not default_situacao:
             st.warning(f"Valor padrão 'Em andamento' não encontrado. Valores disponíveis: {situacoes_unicas}")
 
-    # --- Lógica de Filtragem ---
+    st.markdown("---")
+
+    # --- Lógica de Filtragem (Aplicada após os filtros serem selecionados) ---
     df_filtrado = df.copy()
     if not situacao_filtro and 'Em andamento' in situacoes_unicas:
-        situacao_filtro = ['Em andamento']  # Aplica o filtro padrão se nenhum filtro foi selecionado
+        situacao_filtro = ['Em andamento']
     if secretaria_filtro:
         df_filtrado = df_filtrado[df_filtrado['Secretaria'].isin(secretaria_filtro)]
     if tipo_filtro:
@@ -91,8 +115,6 @@ if not df.empty:
         df_filtrado = df_filtrado[df_filtrado['nome'].isin(projeto_filtro)]
     if situacao_filtro:
         df_filtrado = df_filtrado[df_filtrado['Status do Projeto'].isin(situacao_filtro)]
-
-    st.markdown("<br>", unsafe_allow_html=True)
 
     # --- Box de KPIs (Indicadores) ---
     st.subheader("Resumo dos Projetos")
@@ -113,33 +135,42 @@ if not df.empty:
 
     st.markdown("---")
 
-    # Prepara o dataframe para o gráfico, removendo projetos sem datas essenciais
-    df_grafico = df_filtrado.dropna(subset=['Data de Início do projeto', 'Previsão de término']).copy()
+    # --- GRÁFICO DE GANTT (CRONOGRAMA) ---
+    st.subheader("Cronograma de Entregas")
 
-    # Calcula a duração do MVP com base no percentual de Andamento MVP
-    df_grafico['Andamento MVP'] = pd.to_numeric(df_grafico['Andamento MVP'], errors='coerce').fillna(0)
-    df_grafico['MVP End'] = df_grafico.apply(
-        lambda row: row['Data de Início do projeto'] + timedelta(days=(
-            (row['Previsão de término'] - row['Data de Início do projeto']).days * row['Andamento MVP'] / 100
-        )) if row['Andamento MVP'] > 0 else row['Data de Início do projeto'],
-        axis=1
-    )
-    # Formata o texto do Andamento MVP para exibição
-    df_grafico['Andamento MVP Text'] = df_grafico['Andamento MVP'].apply(lambda x: f"{x:.0f}%" if x > 0 else "")
+    # --- Lógica do Eixo X ---
+    today = pd.Timestamp.now().normalize()
+    min_date_display = today - relativedelta(months=3)
+    max_date_display = today + relativedelta(months=1)
+    
+    # --- FILTRAGEM para eliminar projetos fora do range e com datas inválidas ---
+    df_grafico = df_filtrado.dropna(subset=['Data de Início do projeto', 'Previsão de término']).copy()
+    df_grafico = df_grafico[df_grafico['Data de Início do projeto'] < df_grafico['Previsão de término']]
+    df_grafico = df_grafico[
+        (df_grafico['Data de Início do projeto'] <= max_date_display) &
+        (df_grafico['Previsão de término'] >= min_date_display)
+    ]
 
     if not df_grafico.empty:
-        # Ordena os projetos pela data de início para melhor visualização
         df_grafico = df_grafico.sort_values(by='Data de Início do projeto')
+        nomes_projetos_unicos = df_grafico['nome'].unique().tolist()
+        
+        df_grafico['Andamento MVP'] = pd.to_numeric(df_grafico['Andamento MVP'], errors='coerce').fillna(0)
+        df_grafico['MVP End'] = df_grafico.apply(
+            lambda row: row['Data de Início do projeto'] + timedelta(days=(
+                (row['Previsão de término'] - row['Data de Início do projeto']).days * row['Andamento MVP'] / 100
+            )) if row['Andamento MVP'] > 0 else row['Data de Início do projeto'],
+            axis=1
+        )
 
-        # Cria o gráfico de Gantt com plotly usando Bar
         fig = go.Figure()
 
-        # Adiciona as barras dos projetos
+        bar_height_total = 0.6
+        bar_height_mvp = 0.5
+        
         for idx, row in df_grafico.iterrows():
-            # Calcula a duração do projeto em milissegundos (para trabalhar com datas)
             duracao_ms = (row['Previsão de término'] - row['Data de Início do projeto']).total_seconds() * 1000
             
-            # Barra principal (duração total do projeto)
             fig.add_trace(
                 go.Bar(
                     x=[duracao_ms],
@@ -147,9 +178,10 @@ if not df.empty:
                     base=row['Data de Início do projeto'],
                     orientation='h',
                     marker=dict(
-                        color='#00D000',
-                        opacity=0.7
+                        color='#008000',
+                        opacity=0.8
                     ),
+                    width=bar_height_total,
                     name=row['nome'],
                     text=row['nome'],
                     textposition='outside',
@@ -163,9 +195,7 @@ if not df.empty:
                 )
             )
             
-            # Adiciona a barra de MVP
             if row['Andamento MVP'] > 0:
-                # Calcula a duração do MVP em milissegundos
                 duracao_mvp_ms = (row['MVP End'] - row['Data de Início do projeto']).total_seconds() * 1000
                 
                 fig.add_trace(
@@ -175,11 +205,12 @@ if not df.empty:
                         base=row['Data de Início do projeto'],
                         orientation='h',
                         marker=dict(
-                            color='#00D000',
+                            color='#32CD32',
                             opacity=1.0
                         ),
+                        width=bar_height_mvp,
                         name=f"{row['nome']} MVP",
-                        text=row['Andamento MVP Text'],
+                        text=f"{row['Andamento MVP']:.0f}%",
                         textposition='inside',
                         showlegend=False,
                         hovertemplate=(
@@ -190,19 +221,13 @@ if not df.empty:
                         )
                     )
                 )
-
-        # Define o intervalo do eixo X com base nas datas mínimas e máximas
-        min_date = pd.Timestamp(2025, 1, 1)
-        max_date = max(df_grafico['Previsão de término'].max(), df_grafico['MVP End'].max()) + timedelta(days=30)
-
-        # Gera ticks mensais
-        current_date = min_date.replace(day=1)
+        
+        current_date = min_date_display.replace(day=1)
         tickvals = []
-        while current_date <= max_date:
+        while current_date <= max_date_display:
             tickvals.append(current_date)
             current_date += relativedelta(months=1)
 
-        # Atualizações de layout para melhor visualização
         fig.update_layout(
             title_text='Cronograma de Entregas',
             xaxis_title='Período',
@@ -215,23 +240,23 @@ if not df.empty:
                 tickangle=45,
                 showgrid=True,
                 gridcolor='rgba(211, 211, 211, 0.1)',
-                range=[min_date, max_date]
+                range=[min_date_display, max_date_display]
             ),
             yaxis=dict(
                 autorange="reversed",
                 showgrid=True,
                 gridcolor='rgba(211, 211, 211, 0.5)',
-                showticklabels=False
+                showticklabels=False,
+                categoryorder='array',
+                categoryarray=nomes_projetos_unicos,
             ),
             height=max(400, len(df_grafico) * 60),
             barmode='overlay',
             font=dict(size=12)
         )
 
-        # Ajusta a fonte do texto nas barras
         fig.update_traces(textfont_size=12)
 
-        # Exibe o gráfico no Streamlit
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("Não há dados de data suficientes para exibir o cronograma para os filtros selecionados.")
